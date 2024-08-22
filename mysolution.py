@@ -20,10 +20,12 @@ for seed in seeds:
 
     # GET THE DEMAND
     actual_demand = get_actual_demand(demand)
+    print(actual_demand)
+    break
 
     # CALL YOUR APPROACH HERE
-    solution = get_my_solution(actual_demand)
+    #solution = get_my_solution(actual_demand)
 
     # SAVE YOUR SOLUTION
-    save_solution(solution, f'./output/{seed}.json')
+    #save_solution(solution, f'./output/{seed}.json')
 

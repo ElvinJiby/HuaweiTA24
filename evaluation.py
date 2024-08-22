@@ -131,20 +131,21 @@ def change_selling_prices_format(selling_prices):
 def get_actual_demand(demand):
     # CALCULATE THE ACTUAL DEMAND AT TIME-STEP t
     actual_demand = []
-    for ls in get_known('latency_sensitivity'):
-        for sg in get_known('server_generation'):
-            d = demand[demand['latency_sensitivity'] == ls]
-            sg_demand = d[sg].values.astype(float)
-            rw = get_random_walk(sg_demand.shape[0], 0, 2)
+    for ls in get_known('latency_sensitivity'): # for each sensitivity type (low, med, high)
+        for sg in get_known('server_generation'): # for each server type (cpu.s1, cpu.s2, etc.)
+            d = demand[demand['latency_sensitivity'] == ls] # filters by the current sensitivity (ls)
+            sg_demand = d[sg].values.astype(float) # parses the demand of current server type (sg) and converts it to number
+            rw = get_random_walk(sg_demand.shape[0], 0, 2) # no idea what it does yet but gpt says it causes variability in demand or smtn idk lol
             sg_demand += (rw * sg_demand)
 
-            ls_sg_demand = pd.DataFrame()
+            ls_sg_demand = pd.DataFrame() # makes a dataframe consisting of the server types and their demand for that particular sensitivity and time step
             ls_sg_demand['time_step'] = d['time_step']
             ls_sg_demand['server_generation'] = sg
             ls_sg_demand['latency_sensitivity'] = ls
             ls_sg_demand['demand'] = sg_demand.astype(int)
-            actual_demand.append(ls_sg_demand)
+            actual_demand.append(ls_sg_demand) # appends this dataframe to the actual_demand list
 
+    # I believe this combines all the data frames in the actual_demand list into just one big data frame to give a complete table of information on the demand
     actual_demand = pd.concat(actual_demand, axis=0, ignore_index=True)
     actual_demand = actual_demand.pivot(index=['time_step', 'server_generation'], columns='latency_sensitivity')
     actual_demand.columns = actual_demand.columns.droplevel(0)
