@@ -58,6 +58,8 @@ if __name__ == '__main__':
 
     print(solution)
 
+    print('testing')
+
 
     # Save solution
     # path = './data/solution_example_test.json'
