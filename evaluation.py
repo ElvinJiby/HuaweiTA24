@@ -1,3 +1,5 @@
+
+
 import logging
 import numpy as np
 import pandas as pd
@@ -97,7 +99,7 @@ def check_server_usage_by_release_time(solution):
     # CHECK THAT ONLY THE SERVERS AVAILABLE FOR PURCHASE AT A CERTAIN TIME-STEP
     # ARE USED AT THAT TIME-STEP
     solution['rt_is_fine'] = solution.apply(check_release_time, axis=1)
-    solution = solution[solution['rt_is_fine']]
+    solution = solution[(solution['rt_is_fine'] != 'buy') | solution['rt_is_fine']]
     solution = solution.drop(columns='rt_is_fine', inplace=False)
     return solution
 
@@ -132,21 +134,20 @@ def get_actual_demand(demand):
     # CALCULATE THE ACTUAL DEMAND AT TIME-STEP t
     actual_demand = []
     for ls in get_known('latency_sensitivity'): # for each sensitivity type (low, med, high)
-        for sg in get_known('server_generation'): # for each server type (cpu.s1, cpu.s2, etc.)
-            d = demand[demand['latency_sensitivity'] == ls] # filters by the current sensitivity (ls)
-            sg_demand = d[sg].values.astype(float) # parses the demand of current server type (sg) and converts it to number
-            rw = get_random_walk(sg_demand.shape[0], 0, 2) # no idea what it does yet but gpt says it causes variability in demand or smtn idk lol
+        for sg in get_known('server_generation'): # for each server type (CPU.S1, CPU.S2, etc.)
+            d = demand[demand['latency_sensitivity'] == ls] # filters by the current sensitivity
+            sg_demand = d[sg].values.astype(float) # parses the demand value of that server type
+            rw = get_random_walk(sg_demand.shape[0], 0, 2) # no idea what this does but apparently it simulates variability in demand
             sg_demand += (rw * sg_demand)
 
-            ls_sg_demand = pd.DataFrame() # makes a dataframe consisting of the server types and their demand for that particular sensitivity and time step
+            ls_sg_demand = pd.DataFrame() # makes a dataframe of the demand of the server types for that sensitivity & time step
             ls_sg_demand['time_step'] = d['time_step']
             ls_sg_demand['server_generation'] = sg
             ls_sg_demand['latency_sensitivity'] = ls
             ls_sg_demand['demand'] = sg_demand.astype(int)
-            actual_demand.append(ls_sg_demand) # appends this dataframe to the actual_demand list
+            actual_demand.append(ls_sg_demand) # appends this dataframe to the list called actual_demand
 
-    # I believe this combines all the data frames in the actual_demand list into just one big data frame to give a complete table of information on the demand
-    actual_demand = pd.concat(actual_demand, axis=0, ignore_index=True)
+    actual_demand = pd.concat(actual_demand, axis=0, ignore_index=True) # This combines all the data frames in the list into one
     actual_demand = actual_demand.pivot(index=['time_step', 'server_generation'], columns='latency_sensitivity')
     actual_demand.columns = actual_demand.columns.droplevel(0)
     actual_demand = actual_demand.loc[actual_demand[get_known('latency_sensitivity')].sum(axis=1) > 0]
@@ -174,8 +175,8 @@ def get_time_step_demand(demand, ts):
 
 
 def get_time_step_fleet(solution, ts):
-    # GET THE SOLUTION AT A SPECIFIC TIME-STEP t
-    if ts in solution['time_step']:
+    # GET THE SOLUTION AT A SPECIFIC TIME-STEP 
+    if ts in solution['time_step'].values:
         s = solution[solution['time_step'] == ts]
         s = s.drop_duplicates('server_id', inplace=False)
         s = s.set_index('server_id', drop=False, inplace=False)
@@ -354,14 +355,17 @@ def get_evaluation(solution,
     FLEET = pd.DataFrame()
     # if ts-related fleet is empty then current fleet is ts-fleet
     for ts in range(1, time_steps+1):
+
         # GET THE ACTUAL DEMAND AT TIMESTEP ts
         D = get_time_step_demand(demand, ts)
 
         # GET THE SERVERS DEPLOYED AT TIMESTEP ts
         ts_fleet = get_time_step_fleet(solution, ts)
 
-        if ts_fleet.empty:
+        if ts_fleet.empty and not FLEET.empty:
             ts_fleet = FLEET
+        elif ts_fleet.empty and FLEET.empty:
+            continue
 
         # UPDATE FLEET
         FLEET = update_fleet(ts, FLEET, ts_fleet)
@@ -380,9 +384,9 @@ def get_evaluation(solution,
             L = get_normalized_lifespan(FLEET)
     
             P = get_profit(D, 
-                           Zf, 
-                           selling_prices,
-                           FLEET)
+                            Zf, 
+                            selling_prices,
+                            FLEET)
             o = U * L * P
             OBJECTIVE += o
             
