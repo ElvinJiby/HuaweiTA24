@@ -468,3 +468,20 @@ def evaluation_function(solution,
         logger.error(e)
         return None
 
+def calc_o_value(selling_prices, datacenter):
+    # TODO: Ayush
+    D = 0
+    Zf = 0
+    FLEET = 0
+    
+    U = get_utilization(D, Zf)
+
+    L = get_normalized_lifespan(FLEET)
+
+    P = get_profit(D,
+                   Zf,
+                   selling_prices,
+                   FLEET)
+    o = U * L * P
+    return o
+

@@ -12,11 +12,11 @@ solution = load_solution('./data/solution_example.json')
 demand, datacenters, servers, selling_prices = load_problem_data()
 
 # EVALUATE THE SOLUTION
-score = evaluation_function(solution,
-                            demand,
-                            datacenters,
-                            servers,
-                            selling_prices,
-                            seed=123)
+# score = evaluation_function(solution,
+#                             demand,
+#                             datacenters,
+#                             servers,
+#                             selling_prices,
+#                             seed=123)
 
-print(f'Solution score: {score}')
+# print(f'Solution score: {score}')
