@@ -6,7 +6,7 @@ import pandas as pd
 from scipy.stats import truncweibull_min
 
 
-# CREATE LOGGER
+# CREATE LOGGER (for recording errors/important msgs during evaluation)
 logger = logging.getLogger()
 file_handler = logging.FileHandler('logs.log')
 logger.addHandler(file_handler)
@@ -16,6 +16,7 @@ file_handler.setFormatter(formatter)
 
 
 def get_known(key):
+    """ Returns predefined lists/values based on given key """
     # STORE SOME CONFIGURATION VARIABLES
     if key == 'datacenter_id':
         return ['DC1', 
@@ -50,6 +51,7 @@ def get_known(key):
 
 
 def solution_data_preparation(solution, servers, datacenters, selling_prices):
+    """ Prepares solution data by ensuring it meets the required format by merging relevant data """
     # CHECK DATA FORMAT
     solution = check_data_format(solution)
     solution = check_actions(solution)
@@ -69,7 +71,7 @@ def solution_data_preparation(solution, servers, datacenters, selling_prices):
 
 
 def check_data_format(solution):
-    # CHECK THAT WE HAVE ALL AND ONLY THE REQUIRED COLUMNS
+    """ CHECK THAT WE HAVE ALL AND ONLY THE REQUIRED COLUMNS"""
     required_cols = get_known('required_columns')
     try:
         return solution[required_cols]
@@ -78,7 +80,7 @@ def check_data_format(solution):
 
 
 def check_actions(solution):
-    # CHECK THAT WE ARE USING ONLY ALLOWED ACTIONS
+    """ CHECK THAT WE ARE USING ONLY ALLOWED ACTIONS and that first time step actions are only 'buy'"""
     actions = get_known('actions')
     solution = solution[solution['action'].isin(actions)]
     if not (solution[solution['time_step'] == 1]['action'] == 'buy').all():
@@ -87,7 +89,7 @@ def check_actions(solution):
 
 
 def check_datacenters_servers_generation(solution):
-    # CHECK THAT DATA-CENTERS AND SERVER GENERATIONS ARE NAMED AS REQUESTED
+    """ CHECK THAT DATA-CENTERS AND SERVER GENERATIONS ARE NAMED AS REQUESTED"""
     known_datacenters = get_known('datacenter_id')
     known_generations = get_known('server_generation')
     solution = solution[solution['datacenter_id'].isin(known_datacenters)]
@@ -96,8 +98,7 @@ def check_datacenters_servers_generation(solution):
 
 
 def check_server_usage_by_release_time(solution):
-    # CHECK THAT ONLY THE SERVERS AVAILABLE FOR PURCHASE AT A CERTAIN TIME-STEP
-    # ARE USED AT THAT TIME-STEP
+    """CHECK THAT ONLY THE SERVERS AVAILABLE FOR PURCHASE AT A CERTAIN TIME-STEP ARE USED AT THAT TIME-STEP"""
     solution['rt_is_fine'] = solution.apply(check_release_time, axis=1)
     solution = solution[(solution['rt_is_fine'] != 'buy') | solution['rt_is_fine']]
     solution = solution.drop(columns='rt_is_fine', inplace=False)
@@ -105,7 +106,7 @@ def check_server_usage_by_release_time(solution):
 
 
 def check_release_time(x):
-    # HELPER FUNCTION TO CHECK THE CORRECT SERVER USAGE BY TIME-STEP
+    """HELPER FUNCTION TO CHECK THE CORRECT SERVER USAGE BY TIME-STEP"""
     rt = eval(x['release_time'])
     ts = x['time_step']
     if ts >= min(rt) and ts <= max(rt):
@@ -115,7 +116,7 @@ def check_release_time(x):
 
 
 def drop_duplicate_server_ids(solution):
-    # DROP SERVERS THAT ARE BOUGHT MULTIPLE TIMES WITH THE SAME SERVER ID
+    """DROP SERVERS THAT ARE BOUGHT MULTIPLE TIMES WITH THE SAME SERVER ID"""
     drop = solution[(solution['server_id'].duplicated()) & (solution['action'] == 'buy')].index
     if drop.any():
         solution = solution.drop(index=drop, inplace=False)
@@ -123,15 +124,14 @@ def drop_duplicate_server_ids(solution):
 
 
 def change_selling_prices_format(selling_prices):
-    # ADJUST THE FORMAT OF THE SELLING PRICES DATAFRAME TO GET ALONG WITH THE
-    # REST OF CODE
+    """ADJUST THE FORMAT OF THE SELLING PRICES DATAFRAME TO GET ALONG WITH THE REST OF CODE"""
     selling_prices = selling_prices.pivot(index='server_generation', columns='latency_sensitivity')
     selling_prices.columns = selling_prices.columns.droplevel(0)
     return selling_prices
 
 
 def get_actual_demand(demand):
-    # CALCULATE THE ACTUAL DEMAND AT TIME-STEP t
+    """CALCULATE THE ACTUAL DEMAND AT TIME-STEP t"""
     actual_demand = []
     for ls in get_known('latency_sensitivity'): # for each sensitivity type (low, med, high)
         for sg in get_known('server_generation'): # for each server type (CPU.S1, CPU.S2, etc.)
@@ -156,7 +156,7 @@ def get_actual_demand(demand):
 
 
 def get_random_walk(n, mu, sigma):
-    # HELPER FUNCTION TO GET A RANDOM WALK TO CHANGE THE DEMAND PATTERN
+    """HELPER FUNCTION TO GET A RANDOM WALK TO CHANGE THE DEMAND PATTERN"""
     r = np.random.normal(mu, sigma, n)
     ts = np.empty(n)
     ts[0] = r[0]
@@ -167,7 +167,7 @@ def get_random_walk(n, mu, sigma):
 
 
 def get_time_step_demand(demand, ts):
-    # GET THE DEMAND AT A SPECIFIC TIME-STEP t
+    """GET THE DEMAND AT A SPECIFIC TIME-STEP t"""
     d = demand[demand['time_step'] == ts]
     d = d.set_index('server_generation', drop=True, inplace=False)
     d = d.drop(columns='time_step', inplace=False)
@@ -175,7 +175,7 @@ def get_time_step_demand(demand, ts):
 
 
 def get_time_step_fleet(solution, ts):
-    # GET THE SOLUTION AT A SPECIFIC TIME-STEP 
+    """GET THE SOLUTION (THE SERVERS IN USE) AT A SPECIFIC TIME-STEP"""
     if ts in solution['time_step'].values:
         s = solution[solution['time_step'] == ts]
         s = s.drop_duplicates('server_id', inplace=False)
@@ -187,9 +187,7 @@ def get_time_step_fleet(solution, ts):
 
 
 def get_capacity_by_server_generation_latency_sensitivity(fleet):
-    # CALCULATE THE CAPACITY AT A SPECIFIC TIME-STEP t FOR ALL PAIRS OF
-    # LATENCY SENSITIVITIES AND SERVER GENERATIONS. ADJUST SUCH CAPACITY
-    # ACCORDING TO THE FAILURE RATE f.
+    """CALCULATE THE CAPACITY AT A SPECIFIC TIME-STEP t FOR ALL PAIRS OF LATENCY SENSITIVITIES AND SERVER GENERATIONS. ADJUST SUCH CAPACITY ACCORDING TO THE FAILURE RATE f."""
     Z = fleet.groupby(by=['server_generation', 'latency_sensitivity'])['capacity'].sum().unstack()
     cols = get_valid_columns(Z.columns, get_known('latency_sensitivity'))
     Z = Z[cols]
@@ -199,17 +197,17 @@ def get_capacity_by_server_generation_latency_sensitivity(fleet):
 
 
 def get_valid_columns(cols1, cols2):
-    # HELPER FUNCTION TO GET THE COLUMNS THAT ARE IN THE DATAFRAME
+    """HELPER FUNCTION TO GET THE COLUMNS THAT ARE IN THE DATAFRAME"""
     return list(set(cols1).intersection(set(cols2)))
 
 
 def adjust_capacity_by_failure_rate(x):
-    # HELPER FUNCTION TO CALCULATE THE FAILURE RATE f
+    """HELPER FUNCTION TO CALCULATE THE FAILURE RATE f"""
     return int(x * 1 - truncweibull_min.rvs(0.3, 0.05, 0.1, size=1).item())
 
 
 def check_datacenter_slots_size_constraint(fleet):
-    # CHECK DATACENTERS SLOTS SIZE CONSTRAINT
+    """CHECK DATACENTERS SLOTS SIZE CONSTRAINT"""
     slots = fleet.groupby(by=['datacenter_id']).agg({'slots_size': 'sum',
                                                         'slots_capacity': 'mean'})
     test = slots['slots_size'] > slots['slots_capacity']
@@ -219,7 +217,7 @@ def check_datacenter_slots_size_constraint(fleet):
 
 
 def get_utilization(D, Z):
-    # CALCULATE OBJECTIVE U = UTILIZATION
+    """CALCULATE OBJECTIVE U = UTILIZATION"""
     u = []
     server_generations = Z.index
     latency_sensitivities = Z.columns
@@ -242,19 +240,19 @@ def get_utilization(D, Z):
 
 
 def get_normalized_lifespan(fleet):
-    # CALCULATE OBJECTIVE L = NORMALIZED LIFESPAN
+    """CALCULATE OBJECTIVE L = NORMALIZED LIFESPAN"""
     return (fleet['lifespan'] / fleet['life_expectancy']).sum() / fleet.shape[0]
 
 
 def get_profit(D, Z, selling_prices, fleet):
-    # CALCULATE OBJECTIVE P = PROFIT
+    """CALCULATE OBJECTIVE P = PROFIT"""
     R = get_revenue(D, Z, selling_prices)
     C = get_cost(fleet)
     return R - C
 
 
 def get_revenue(D, Z, selling_prices):
-    # CALCULATE THE REVENUE
+    """CALCULATE THE REVENUE"""
     r = 0
     server_generations = Z.index
     latency_sensitivities = Z.columns
@@ -268,7 +266,7 @@ def get_revenue(D, Z, selling_prices):
 
 
 def get_cost(fleet):
-    # CALCULATE THE COST
+    """CALCULATE THE COST"""
     fleet['cost'] = fleet.apply(calculate_server_cost, axis=1)
     return fleet['cost'].sum()
 
