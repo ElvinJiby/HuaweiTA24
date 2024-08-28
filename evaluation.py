@@ -468,20 +468,32 @@ def evaluation_function(solution,
         logger.error(e)
         return None
 
-def calc_o_value(selling_prices, datacenter):
+def calc_o_value(datacenter_id, fleet, selling_prices, demand, current_time_step):
     # TODO: Ayush
-    D = 0
-    Zf = 0
-    FLEET = 0
-    
+
+    # Get current fleet for the data center
+    datacenter_fleet = fleet[fleet['datacenter_id'] == datacenter_id]
+
+    # If fleet is empty, skip calculation
+    if datacenter_fleet.empty:
+        return 0
+
+    # Get the necessary data to calculate U, L, and P
+    Zf = get_capacity_by_server_generation_latency_sensitivity(datacenter_fleet)
+    D = get_time_step_demand(demand, current_time_step)
+
     U = get_utilization(D, Zf)
+    L = get_normalized_lifespan(datacenter_fleet)
+    P = get_profit(D, Zf, selling_prices, datacenter_fleet)
 
-    L = get_normalized_lifespan(FLEET)
+    return U * L * P
 
-    P = get_profit(D,
-                   Zf,
-                   selling_prices,
-                   FLEET)
-    o = U * L * P
-    return o
+def is_datacenter_full(datacenter_id, fleet, datacenters):
+    # get total capacity of datacenter
+    max_capacity = datacenters[datacenters['datacenter_id'] == datacenter_id]['slots_capacity'].values[0]
 
+    # get current number of used slots by fleet in this datacenter
+    current_used_capacity = fleet[fleet['datacenter_id'] == datacenter_id]['slots_size'].sum()
+
+    # check if datacenter is full
+    return current_used_capacity >= max_capacity
