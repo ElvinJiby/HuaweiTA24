@@ -76,6 +76,7 @@ def get_my_solution(actual_demand, datacenters, servers, selling_prices):
                     datacenters_info[best_datacenter]["capacity_used"] += (
                         servers.loc[servers['server_generation'] == current_demand['server_generation'], 'slots_size'].values)[0]
 
+            # TODO: fix fleet['datacenter_id'] error and implement 'Buy','Dismiss' & 'Move' actions
     return solution
 
 
