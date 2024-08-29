@@ -468,29 +468,55 @@ def evaluation_function(solution,
         logger.error(e)
         return None
 
-def calc_o_value(datacenter_id, fleet, selling_prices, demand, current_time_step):
-    # TODO: Ayush
+def calc_o_value(solution, current_demand, datacenters, servers, selling_prices, ts, fleet):
+    """Function that calculates the O value for a datacenter at a given time-step"""
+    # prepare solution data
+    solution = solution_data_preparation(solution, servers, datacenters, selling_prices)
 
-    # Get current fleet for the data center
-    datacenter_fleet = fleet[fleet['datacenter_id'] == datacenter_id]
+    # Initialise fleet if empty
+    if fleet is None:
+        fleet = pd.DataFrame()
 
-    # If fleet is empty, skip calculation
-    if datacenter_fleet.empty:
-        return 0
+    # GET THE SERVERS DEPLOYED AT TIMESTEP ts
+    ts_fleet = get_time_step_fleet(solution, ts)
 
-    # Get the necessary data to calculate U, L, and P
-    Zf = get_capacity_by_server_generation_latency_sensitivity(datacenter_fleet)
-    D = get_time_step_demand(demand, current_time_step)
+    # if there's no fleet for the current time step, use existing fleet
+    if ts_fleet.empty and not fleet.empty:
+        ts_fleet = fleet
 
-    U = get_utilization(D, Zf)
-    L = get_normalized_lifespan(datacenter_fleet)
-    P = get_profit(D, Zf, selling_prices, datacenter_fleet)
+    # UPDATE FLEET
+    fleet = update_fleet(ts, fleet, ts_fleet)
 
-    return U * L * P
+    o_value = 0 # initialise o_value to 0 incase fleet is empty
+
+    if not fleet.empty:
+        # GET THE SERVERS CAPACITY AT TIMESTEP ts
+        Zf = get_capacity_by_server_generation_latency_sensitivity(fleet)
+
+        # CHECK CONSTRAINTS
+        try:
+            check_datacenter_slots_size_constraint(fleet)
+        except ValueError as e:
+            print(f"Constraint error at time step {ts}: {e}")
+            return -1
+
+        # EVALUATE THE OBJECTIVE FUNCTION AT TIMESTEP ts
+        U = get_utilization(current_demand, Zf)
+        L = get_normalized_lifespan(fleet)
+        P = get_profit(current_demand, Zf, selling_prices, fleet)
+
+        o_value = U * L * P
+
+    return o_value, fleet
 
 def is_datacenter_full(datacenter_id, fleet, datacenters):
+    """ Function to check if the given datacenter is full or not to receive servers"""
     # get total capacity of datacenter
     max_capacity = datacenters[datacenters['datacenter_id'] == datacenter_id]['slots_capacity'].values[0]
+
+    # error handling
+    if 'datacenter_id' not in fleet.columns or 'slots_size' not in fleet.columns:
+        raise Exception(f"Warning: 'datacenter_id' or 'slots_size' columns missing in fleet DataFrame.")
 
     # get current number of used slots by fleet in this datacenter
     current_used_capacity = fleet[fleet['datacenter_id'] == datacenter_id]['slots_size'].sum()
