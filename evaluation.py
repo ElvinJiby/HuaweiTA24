@@ -501,11 +501,11 @@ def calc_o_value(solution, current_demand, datacenters, servers, selling_prices,
             return -1
 
         # EVALUATE THE OBJECTIVE FUNCTION AT TIMESTEP ts
-        U = get_utilization(current_demand, Zf)
-        L = get_normalized_lifespan(fleet)
-        P = get_profit(current_demand, Zf, selling_prices, fleet)
+        server_utilisation = get_utilization(current_demand, Zf)
+        server_lifespan = get_normalized_lifespan(fleet)
+        profit = get_profit(current_demand, Zf, selling_prices, fleet)
 
-        o_value = U * L * P
+        o_value = server_utilisation * server_lifespan * profit
 
     return o_value, fleet
 
