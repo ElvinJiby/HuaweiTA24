@@ -5,7 +5,7 @@ import scipy as sp
 from evaluation import get_actual_demand
 from mysolution import get_my_solution
 from seeds import known_seeds
-from utils import load_problem_data
+from utils import load_problem_data, save_solution
 
 seeds = known_seeds('training')
 demand = pd.read_csv('./data/demand.csv')
@@ -23,8 +23,9 @@ for seed in seeds:
 
     # CALL YOUR APPROACH HERE
     solution = get_my_solution(actual_demand, datacenters, servers, selling_prices)
-    print(solution)
+    # print(solution)
 
-    break
+    # break
     # SAVE YOUR SOLUTION
-    #save_solution(solution, f'./output/{seed}.json')
+    save_solution(solution, f'./output/bruh.json')
+    break
