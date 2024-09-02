@@ -19,9 +19,10 @@ for seed in seeds:
 
     # GET THE DEMAND
     actual_demand = get_actual_demand(demand)
+    # print(actual_demand.iloc[:2])
 
     # CALL YOUR APPROACH HERE
-    solution = get_my_solution(actual_demand.iloc[0], datacenters, servers, selling_prices)
+    solution = get_my_solution(actual_demand, datacenters, servers, selling_prices)
     print(solution)
 
     break

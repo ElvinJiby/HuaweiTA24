@@ -1,8 +1,6 @@
-
-import numpy as np
 import pandas as pd
 
-from evaluation import get_actual_demand, calc_o_value, is_datacenter_full, update_fleet, get_time_step_demand
+from evaluation import calc_o_value, is_datacenter_full
 
 def handle_buy_action(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices):
     best_o_value = -float('inf')
@@ -87,6 +85,78 @@ def decide_actions_for_time_step(time_step, current_demand, solution, fleet, dat
     return solution, fleet
 
 
+def buy_initial_demand(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices):
+    for index, row in current_demand.iterrows():
+        server_generation = row['server_generation']
+        print("Server Gens: ",server_generation)
+
+        # Get the demand for this server generation and latency sensitivity
+        demand_high = row['high']
+        demand_low = row['low']
+        demand_medium = row['medium']
+
+        print("Demand (High):",demand_high, "Demand (Low):", demand_low, "Demand (Medium):", demand_medium)
+
+        # Get the available servers of this generation
+        available_servers = servers[(servers['server_generation'] == server_generation) &
+                                    (servers['release_time'].apply(lambda x: time_step in eval(x)))]
+        print("Available Servers: \n",available_servers)
+
+        for _, server in available_servers.iterrows():
+            # Buying strategy: Meet high latency demand first, then medium, then low
+            demand_to_meet = [demand_high, demand_medium, demand_low]
+            latency_labels = ['high', 'medium', 'low']
+
+            for demand, latency in zip(demand_to_meet, latency_labels): # the zip method puts the demand numbers and latency into pairs
+                print("Demand: ", demand, "Latency: ", latency)
+                required_capacity = 0
+                if demand > 0:
+                    required_capacity = demand
+
+                    # Calculate how many servers are needed
+                    num_servers_to_buy = required_capacity // server['capacity'] # // is the floor division operator (i.e. divides then floors result)
+                    print("Num Servers to Buy: ",num_servers_to_buy)
+                    remaining_slots = datacenters[datacenters['latency_sensitivity'] == latency]['slots_capacity'].iloc[0]
+                    print("Remaining Slots: ",remaining_slots)
+
+                    # Ensure we don't exceed slot capacity
+                    servers_to_buy = min(num_servers_to_buy, remaining_slots // server['slots_size'])
+                    print("Servers to Buy: ",servers_to_buy, "\n")
+
+                    for i in range(servers_to_buy):
+                        action = {
+                            'time_step': time_step,
+                            'datacenter_id':
+                                datacenters[datacenters['latency_sensitivity'] == latency]['datacenter_id'].iloc[0],
+                            'server_generation': server_generation,
+                            'server_id': f"{server_generation}_{time_step}_{i}",
+                            'action': 'buy'
+                        }
+
+                        action_df = pd.DataFrame([action])
+                        solution = pd.concat([solution, action_df], ignore_index=True)
+
+                        fleet_df = pd.DataFrame([{**action_df, 'slots_size': server['slots_size'], 'lifespan': 0,
+                                              'moved': 0, 'life_expectancy': server['life_expectancy'],
+                                              'capacity': server['capacity']}])
+                        fleet = pd.concat([fleet, fleet_df], ignore_index=True)
+
+                        # Reduce the unmet demand
+                        required_capacity -= server['capacity']
+                        if required_capacity <= 0:
+                            break  # Move to the next demand category
+
+                # Update the remaining demand for subsequent latency categories
+                if latency == 'high':
+                    demand_high = required_capacity
+                elif latency == 'medium':
+                    demand_medium = required_capacity
+                elif latency == 'low':
+                    demand_low = required_capacity
+
+    return solution, fleet
+
+
 def get_my_solution(actual_demand, datacenters, servers, selling_prices):
     # Initialise the solution data frame
     solution_columns = ['time_step', 'datacenter_id', 'server_generation', 'server_id', 'action']
@@ -100,10 +170,14 @@ def get_my_solution(actual_demand, datacenters, servers, selling_prices):
     # Iterate over each time step
     for time_step in range(1, len(actual_demand) + 1):
         # Get demand for the current time step
-        current_demand = actual_demand.iloc[time_step - 1]
+        current_demand = actual_demand[actual_demand['time_step'] == time_step]
 
-        # Decide on actions based on demand and current fleet
-        solution, fleet = decide_actions_for_time_step(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices)
+        if time_step != 1:
+            # Decide on actions based on demand and current fleet
+            solution, fleet = decide_actions_for_time_step(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices)
+        else: # First Time Step - i.e. no servers initially
+            solution, fleet = buy_initial_demand(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices)
+            break
 
     return solution
 
