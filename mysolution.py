@@ -10,7 +10,7 @@ def handle_buy_action(time_step, current_demand, solution, fleet, datacenters, s
         demand_medium = row['medium']
 
         # Check existing fleet capacity before buying new servers
-        existing_capacity = fleet[fleet['server_generation'] == server_generation]['capacity'].sum()
+        existing_capacity = fleet[(fleet['server_generation'] == server_generation)]['capacity'].sum()
 
         # Calculate unmet demand after considering existing capacity
         unmet_demand_high = max(demand_high - existing_capacity, 0)
@@ -142,16 +142,12 @@ def handle_move_action(time_step, solution, fleet, datacenters):
 
 
 def decide_actions_for_time_step(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices, server_id_counter):
-    # Make copy of solution & fleet
-    #solution_copy = solution.copy()
-    #fleet_copy = fleet.copy()
-
     # Action: Buy
-    solution_copy_buy, fleet_copy_buy, server_id_counter = handle_buy_action(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices, server_id_counter)
+    solution, fleet, server_id_counter = handle_buy_action(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices, server_id_counter)
     # o_value_buy = get o value for that
 
-    # TODO: Action: Sell
-    # solution, fleet = handle_dismiss_action(time_step, solution, fleet, datacenters)
+    # Action: Sell
+    solution, fleet, server_id_counter = handle_sell_action(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices, server_id_counter)
     # o_value_sell = get_evaluation(solution, fleet)
 
     # TODO: Action: Move
@@ -240,29 +236,28 @@ def buy_initial_demand(time_step, current_demand, solution, fleet, datacenters, 
 
 
 def get_my_solution(actual_demand, datacenters, servers, selling_prices):
-    # Initialise the solution data frame
-    solution_columns = ['time_step', 'datacenter_id', 'server_generation', 'server_id', 'action']
-    solution = pd.DataFrame(columns=solution_columns)
+        # Initialise the solution data frame
+        solution_columns = ['time_step', 'datacenter_id', 'server_generation', 'server_id', 'action']
+        solution = pd.DataFrame(columns=solution_columns)
 
-    # Initialise the fleet data frame
-    fleet_columns = ['time_step', 'datacenter_id', 'server_generation', 'server_id', 'action',
-                     'slots_size', 'lifespan', 'moved', 'life_expectancy', 'capacity']
-    fleet = pd.DataFrame(columns=fleet_columns)
+        # Initialise the fleet data frame
+        fleet_columns = ['time_step', 'datacenter_id', 'server_generation', 'server_id', 'action',
+                         'slots_size', 'lifespan', 'moved', 'life_expectancy', 'capacity']
+        fleet = pd.DataFrame(columns=fleet_columns)
 
-    # Counter to store server ID (for output)
-    server_id_counter = 0
+        # Counter to store server ID (for output)
+        server_id_counter = 0
 
-    # Iterate over each time step
-    for time_step in range(1, len(actual_demand) + 1):
-        # Get demand for the current time step
-        current_demand = actual_demand[actual_demand['time_step'] == time_step]
+        # Iterate over each time step
+        for time_step in range(1, len(actual_demand) + 1):
+            # Get demand for the current time step
+            current_demand = actual_demand[actual_demand['time_step'] == time_step]
 
-        if time_step != 1:
-            # Decide on actions based on demand and current fleet
-            solution, fleet, server_id_counter = decide_actions_for_time_step(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices, server_id_counter)
-        else: # First Time Step - i.e. no servers initially
-            solution, fleet, server_id_counter = buy_initial_demand(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices, server_id_counter)
-            break
+            if time_step != 1:
+                # Decide on actions based on demand and current fleet
+                solution, fleet, server_id_counter = decide_actions_for_time_step(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices, server_id_counter)
+            else: # First Time Step - i.e. no servers initially
+                solution, fleet, server_id_counter = buy_initial_demand(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices, server_id_counter)
 
-    return solution
+        return solution
 
