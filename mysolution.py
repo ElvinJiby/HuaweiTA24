@@ -137,8 +137,71 @@ def handle_sell_action(time_step, current_demand, solution, fleet, datacenters, 
 
     return solution, fleet, server_id_counter
 
-def handle_move_action(time_step, solution, fleet, datacenters):
-    return solution, fleet
+def handle_move_action(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter):
+    for index, row in current_demand.iterrows():
+        server_generation = row['server_generation']
+
+        # Get the demand for this server generation and latency sensitivity
+        demand_high = row['high']
+        demand_low = row['low']
+        demand_medium = row['medium']
+
+        # Calculate current fleet capacity per latency sensitivity
+        high_capacity = fleet[(fleet['server_generation'] == server_generation) & (fleet['latency_sensitivity'] == 'high')]['capacity'].sum()
+        medium_capacity = fleet[(fleet['server_generation'] == server_generation) & (fleet['latency_sensitivity'] == 'medium')]['capacity'].sum()
+        low_capacity = fleet[(fleet['server_generation'] == server_generation) & (fleet['latency_sensitivity'] == 'low')]['capacity'].sum()
+
+        # Determine if there's a need to move servers to better match the demand
+        unmet_demand_high = max(demand_high - high_capacity, 0)
+        unmet_demand_medium = max(demand_medium - medium_capacity, 0)
+        unmet_demand_low = max(demand_low - low_capacity, 0)
+
+        # Identify excess capacity in latency categories that could be used elsewhere
+        excess_capacity_high = max(high_capacity - demand_high, 0)
+        excess_capacity_medium = max(medium_capacity - demand_medium, 0)
+        excess_capacity_low = max(low_capacity - demand_low, 0)
+
+        # Move servers based on unmet demand and excess capacity
+        for excess, source_latency, target_demand, target_latency in [
+            (excess_capacity_high, 'high', unmet_demand_medium, 'medium'),
+            (excess_capacity_high, 'high', unmet_demand_low, 'low'),
+            (excess_capacity_medium, 'medium', unmet_demand_high, 'high'),
+            (excess_capacity_medium, 'medium', unmet_demand_low, 'low'),
+            (excess_capacity_low, 'low', unmet_demand_high, 'high'),
+            (excess_capacity_low, 'low', unmet_demand_medium, 'medium'),
+        ]:
+            if excess > 0 and target_demand > 0:
+                # Identify servers in the fleet that can be moved
+                servers_to_move = fleet[(fleet['server_generation'] == server_generation) &
+                                        (fleet['latency_sensitivity'] == source_latency)]
+
+                for _, server in servers_to_move.iterrows():
+                    if target_demand <= 0:
+                        break
+
+                    # Move one server at a time
+                    action = {
+                        'time_step': time_step,
+                        'datacenter_id': datacenters[datacenters['latency_sensitivity'] == target_latency]['datacenter_id'].iloc[0],
+                        'server_generation': server_generation,
+                        'server_id': server['server_id'],
+                        'action': 'move',
+                        'from_latency': source_latency,
+                        'to_latency': target_latency
+                    }
+
+                    action_df = pd.DataFrame([action])
+                    solution = pd.concat([solution, action_df], ignore_index=True)
+
+                    # Update the server's latency sensitivity and datacenter in the fleet
+                    fleet.loc[fleet['server_id'] == server['server_id'], 'latency_sensitivity'] = target_latency
+                    fleet.loc[fleet['server_id'] == server['server_id'], 'datacenter_id'] = action['datacenter_id']
+
+                    # Adjust the remaining demand and excess capacity
+                    target_demand -= server['capacity']
+                    excess -= server['capacity']
+
+    return solution, fleet, server_id_counter
 
 
 def decide_actions_for_time_step(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices, server_id_counter):
@@ -151,6 +214,9 @@ def decide_actions_for_time_step(time_step, current_demand, solution, fleet, dat
     # o_value_buy = get o value for that
 
     # TODO: Action: Sell
+    solution_copy_buy, fleet_copy_buy, server_id_counter = handle_sell_action(time_step, current_demand, solution, fleet,
+                                                                             datacenters, servers, selling_prices,
+                                                                             server_id_counter)
     # solution, fleet = handle_dismiss_action(time_step, solution, fleet, datacenters)
     # o_value_sell = get_evaluation(solution, fleet)
 
@@ -262,7 +328,7 @@ def get_my_solution(actual_demand, datacenters, servers, selling_prices):
             solution, fleet, server_id_counter = decide_actions_for_time_step(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices, server_id_counter)
         else: # First Time Step - i.e. no servers initially
             solution, fleet, server_id_counter = buy_initial_demand(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices, server_id_counter)
-            break
+
 
     return solution
 
