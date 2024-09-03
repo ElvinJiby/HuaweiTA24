@@ -83,72 +83,59 @@ def handle_sell_action(time_step, current_demand, solution, fleet, datacenters, 
         demand_low = row['low']
         demand_medium = row['medium']
 
-        # Check existing fleet capacity before buying new servers
+        # Check existing fleet capacity before deciding to sell servers
         existing_capacity = fleet[fleet['server_generation'] == server_generation]['capacity'].sum()
 
-        # Calculate unmet demand after considering existing capacity
-        unmet_demand_high = max(abs(demand_high - existing_capacity), 0)
-        unmet_demand_medium = max(abs(demand_medium - existing_capacity), 0)
-        unmet_demand_low = max(abs(demand_low - existing_capacity), 0)
+        # Calculate excess capacity after meeting the demand
+        excess_capacity_high = max(existing_capacity - demand_high, 0)
+        excess_capacity_medium = max(existing_capacity - demand_medium, 0)
+        excess_capacity_low = max(existing_capacity - demand_low, 0)
 
-        # Get the available servers of this generation
-        available_servers = selling_prices[(selling_prices['server_generation'] == server_generation)
-                                    ]
+        # Get servers in the fleet that can be sold
+        servers_in_fleet = fleet[fleet['server_generation'] == server_generation]
 
-        for _, server in available_servers.iterrows():
-            # Buying strategy: Meet high latency demand first, then medium, then low
-            demand_to_meet = [unmet_demand_high, unmet_demand_medium, unmet_demand_low]
+        for _, server in servers_in_fleet.iterrows():
+            # Selling strategy: Reduce excess capacity starting with high latency demand, then medium, then low
+            excess_capacity_to_reduce = [excess_capacity_high, excess_capacity_medium, excess_capacity_low]
             latency_labels = ['high', 'medium', 'low']
 
-            for demand, latency in zip(demand_to_meet, latency_labels):
-                required_capacity = 0
-                if demand > 0:
-                    required_capacity = demand
+            for excess, latency in zip(excess_capacity_to_reduce, latency_labels):
+                if excess > 0:
+                    capacity_to_remove = server['capacity']
+                    num_servers_to_sell = min(excess // capacity_to_remove, len(servers_in_fleet))
 
-                    # Calculate how many servers are needed
-                    num_servers_to_sell = required_capacity // server['capacity']
-                    remaining_slots = datacenters[datacenters['latency_sensitivity'] == latency]['slots_capacity'].iloc[0]
-
-
-
-                    for _ in range(num_servers_to_sell):
+                    for i in range(num_servers_to_sell):
                         action = {
                             'time_step': time_step,
-                            'datacenter_id':
-                                datacenters[datacenters['latency_sensitivity'] == latency]['datacenter_id'].iloc[0],
+                            'datacenter_id': server['datacenter_id'],
                             'server_generation': server_generation,
-                            'server_id': f"{server_generation}_{server_id_counter}",
+                            'server_id': f"{server_generation}_TS{time_step}_{server_id_counter}",  # Use existing server ID to remove it
                             'action': 'sell'
                         }
 
                         action_df = pd.DataFrame([action])
                         solution = pd.concat([solution, action_df], ignore_index=True)
 
-                        fleet_df = pd.DataFrame([{**action, 'slots_size': server['slots_size'], 'lifespan': 0,
-                                                  'moved': 0, 'life_expectancy': server['life_expectancy'],
-                                                  'capacity': server['capacity']}])
-                        fleet = pd.concat([fleet, fleet_df], ignore_index=True)
+                        # Remove the server from the fleet
+                        fleet = fleet[fleet['server_id'] != server['server_id']]
 
-                        # Increment the server ID counter
+                        # Increment server ID counter
                         server_id_counter += 1
 
-                        # Reduce the unmet demand
-                        required_capacity -= server['capacity']
-                        if required_capacity <= 0:
-                            break  # Move to the next demand category
+                        # Reduce the excess capacity
+                        excess -= capacity_to_remove
+                        if excess <= 0:
+                            break  # Move to the next excess category
 
-                # Update the remaining demand for subsequent latency categories
+                # Update the remaining excess capacity for subsequent latency categories
                 if latency == 'high':
-                    unmet_demand_high = required_capacity
+                    excess_capacity_high = excess
                 elif latency == 'medium':
-                    unmet_demand_medium = required_capacity
+                    excess_capacity_medium = excess
                 elif latency == 'low':
-                    unmet_demand_low = required_capacity
+                    excess_capacity_low = excess
 
     return solution, fleet, server_id_counter
-
-
-
 
 def handle_move_action(time_step, solution, fleet, datacenters):
     return solution, fleet
