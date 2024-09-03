@@ -74,10 +74,80 @@ def handle_buy_action(time_step, current_demand, solution, fleet, datacenters, s
 
     return solution, fleet, server_id_counter
 
+def handle_sell_action(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices, server_id_counter):
+    for index, row in current_demand.iterrows():
+        server_generation = row['server_generation']
+
+        # Get the demand for this server generation and latency sensitivity
+        demand_high = row['high']
+        demand_low = row['low']
+        demand_medium = row['medium']
+
+        # Check existing fleet capacity before buying new servers
+        existing_capacity = fleet[fleet['server_generation'] == server_generation]['capacity'].sum()
+
+        # Calculate unmet demand after considering existing capacity
+        unmet_demand_high = max(abs(demand_high - existing_capacity), 0)
+        unmet_demand_medium = max(abs(demand_medium - existing_capacity), 0)
+        unmet_demand_low = max(abs(demand_low - existing_capacity), 0)
+
+        # Get the available servers of this generation
+        available_servers = selling_prices[(selling_prices['server_generation'] == server_generation)
+                                    ]
+
+        for _, server in available_servers.iterrows():
+            # Buying strategy: Meet high latency demand first, then medium, then low
+            demand_to_meet = [unmet_demand_high, unmet_demand_medium, unmet_demand_low]
+            latency_labels = ['high', 'medium', 'low']
+
+            for demand, latency in zip(demand_to_meet, latency_labels):
+                required_capacity = 0
+                if demand > 0:
+                    required_capacity = demand
+
+                    # Calculate how many servers are needed
+                    num_servers_to_sell = required_capacity // server['capacity']
+                    remaining_slots = datacenters[datacenters['latency_sensitivity'] == latency]['slots_capacity'].iloc[0]
 
 
-def handle_dismiss_action(time_step, solution, fleet, datacenters):
-    return solution, fleet
+
+                    for _ in range(num_servers_to_sell):
+                        action = {
+                            'time_step': time_step,
+                            'datacenter_id':
+                                datacenters[datacenters['latency_sensitivity'] == latency]['datacenter_id'].iloc[0],
+                            'server_generation': server_generation,
+                            'server_id': f"{server_generation}_{server_id_counter}",
+                            'action': 'sell'
+                        }
+
+                        action_df = pd.DataFrame([action])
+                        solution = pd.concat([solution, action_df], ignore_index=True)
+
+                        fleet_df = pd.DataFrame([{**action, 'slots_size': server['slots_size'], 'lifespan': 0,
+                                                  'moved': 0, 'life_expectancy': server['life_expectancy'],
+                                                  'capacity': server['capacity']}])
+                        fleet = pd.concat([fleet, fleet_df], ignore_index=True)
+
+                        # Increment the server ID counter
+                        server_id_counter += 1
+
+                        # Reduce the unmet demand
+                        required_capacity -= server['capacity']
+                        if required_capacity <= 0:
+                            break  # Move to the next demand category
+
+                # Update the remaining demand for subsequent latency categories
+                if latency == 'high':
+                    unmet_demand_high = required_capacity
+                elif latency == 'medium':
+                    unmet_demand_medium = required_capacity
+                elif latency == 'low':
+                    unmet_demand_low = required_capacity
+
+    return solution, fleet, server_id_counter
+
+
 
 
 def handle_move_action(time_step, solution, fleet, datacenters):
