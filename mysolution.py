@@ -165,10 +165,8 @@ def handle_move_action(time_step, current_demand, solution, fleet, datacenters, 
         for excess, source_latency, target_demand, target_latency in [
             (excess_capacity_high, 'high', unmet_demand_medium, 'medium'),
             (excess_capacity_high, 'high', unmet_demand_low, 'low'),
-            (excess_capacity_medium, 'medium', unmet_demand_high, 'high'),
             (excess_capacity_medium, 'medium', unmet_demand_low, 'low'),
-            (excess_capacity_low, 'low', unmet_demand_high, 'high'),
-            (excess_capacity_low, 'low', unmet_demand_medium, 'medium'),
+
         ]:
             if excess > 0 and target_demand > 0:
                 # Identify servers in the fleet that can be moved
@@ -184,7 +182,7 @@ def handle_move_action(time_step, current_demand, solution, fleet, datacenters, 
                         'time_step': time_step,
                         'datacenter_id': datacenters[datacenters['latency_sensitivity'] == target_latency]['datacenter_id'].iloc[0],
                         'server_generation': server_generation,
-                        'server_id': server['server_id'],
+                        'server_id':  f"{server_generation}_TS{time_step}_{server_id_counter}",
                         'action': 'move',
                         'from_latency': source_latency,
                         'to_latency': target_latency
@@ -197,6 +195,8 @@ def handle_move_action(time_step, current_demand, solution, fleet, datacenters, 
                     fleet.loc[fleet['server_id'] == server['server_id'], 'latency_sensitivity'] = target_latency
                     fleet.loc[fleet['server_id'] == server['server_id'], 'datacenter_id'] = action['datacenter_id']
 
+                    # Increment server ID counter
+                    server_id_counter += 1
                     # Adjust the remaining demand and excess capacity
                     target_demand -= server['capacity']
                     excess -= server['capacity']
