@@ -326,7 +326,7 @@ def get_my_solution(actual_demand, datacenters, servers, selling_prices):
     profit = 0
 
     # Iterate over each time step
-    for time_step in range(2, len(actual_demand) + 1):
+    for time_step in range(1, len(actual_demand) + 1):
         if time_step == 11:
             break
         # Get demand for the current time step

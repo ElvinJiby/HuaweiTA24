@@ -7,7 +7,7 @@ from mysolution import get_my_solution
 from seeds import known_seeds
 from utils import load_problem_data, save_solution
 
-seeds = known_seeds('training')
+seeds = known_seeds('test')
 demand = pd.read_csv('./data/demand.csv')
 
 for seed in seeds:
