@@ -23,9 +23,9 @@ for seed in seeds:
 
     # CALL YOUR APPROACH HERE
     solution = get_my_solution(actual_demand, datacenters, servers, selling_prices)
-    # print(solution)
+    print("Done")
 
     # break
     # SAVE YOUR SOLUTION
-    save_solution(solution, f'./output/bruh.json')
+    save_solution(solution, f'./output/{seed}.json')
     break

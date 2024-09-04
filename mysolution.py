@@ -54,9 +54,14 @@ def buy_initial_demand(time_step, current_demand, solution, fleet, datacenters, 
                         action_df = pd.DataFrame([action])
                         solution = pd.concat([solution, action_df], ignore_index=True)
 
-                        fleet_df = pd.DataFrame([{**action_df, 'slots_size': server['slots_size'], 'lifespan': 0,
-                                              'moved': 0, 'life_expectancy': server['life_expectancy'],
-                                              'capacity': server['capacity']}])
+                        fleet_df = pd.DataFrame([{**action_df,
+                                                'slots_size': server['slots_size'],
+                                                'lifespan': 0,
+                                                'moved': 0,
+                                                'life_expectancy': server['life_expectancy'],
+                                                'capacity': server['capacity'],
+                                                'latency_sensitivity': latency
+                                                  }])
                         fleet = pd.concat([fleet, fleet_df], ignore_index=True)
 
                         server_id_counter += 1 # increment counter
@@ -87,7 +92,7 @@ def handle_buy_action(time_step, current_demand, solution, fleet, datacenters, s
         demand_medium = row['medium']
 
         # Check existing fleet capacity before buying new servers
-        existing_capacity = fleet[(fleet['server_generation'] == server_generation)]['capacity'].sum()
+        existing_capacity = fleet[(fleet['server_generation'].astype(str) == server_generation)]['capacity'].sum()
 
         # Calculate unmet demand after considering existing capacity
         unmet_demand_high = max(demand_high - existing_capacity, 0)
@@ -128,9 +133,14 @@ def handle_buy_action(time_step, current_demand, solution, fleet, datacenters, s
                         action_df = pd.DataFrame([action])
                         solution = pd.concat([solution, action_df], ignore_index=True)
 
-                        fleet_df = pd.DataFrame([{**action, 'slots_size': server['slots_size'], 'lifespan': 0,
-                                                  'moved': 0, 'life_expectancy': server['life_expectancy'],
-                                                  'capacity': server['capacity']}])
+                        fleet_df = pd.DataFrame([{**action,
+                                                  'slots_size': server['slots_size'],
+                                                  'lifespan': 0,
+                                                  'moved': 0,
+                                                  'life_expectancy': server['life_expectancy'],
+                                                  'capacity': server['capacity'],
+                                                  'latency_sensitivity': latency
+                                                  }])
                         fleet = pd.concat([fleet, fleet_df], ignore_index=True)
 
                         # Increment the server ID counter
@@ -162,7 +172,7 @@ def handle_sell_action(time_step, current_demand, solution, fleet, datacenters, 
         demand_medium = row['medium']
 
         # Check existing fleet capacity before deciding to sell servers
-        existing_capacity = fleet[fleet['server_generation'] == server_generation]['capacity'].sum()
+        existing_capacity = fleet[fleet['server_generation'].astype(str) == server_generation]['capacity'].sum()
 
         # Calculate excess capacity after meeting the demand
         excess_capacity_high = max(existing_capacity - demand_high, 0)
@@ -170,7 +180,7 @@ def handle_sell_action(time_step, current_demand, solution, fleet, datacenters, 
         excess_capacity_low = max(existing_capacity - demand_low, 0)
 
         # Get servers in the fleet that can be sold
-        servers_in_fleet = fleet[fleet['server_generation'] == server_generation]
+        servers_in_fleet = fleet[fleet['server_generation'].astype(str) == server_generation]
 
         for _, server in servers_in_fleet.iterrows():
             # Selling strategy: Reduce excess capacity starting with high latency demand, then medium, then low
@@ -195,7 +205,7 @@ def handle_sell_action(time_step, current_demand, solution, fleet, datacenters, 
                         solution = pd.concat([solution, action_df], ignore_index=True)
 
                         # Remove the server from the fleet
-                        fleet = fleet[fleet['server_id'] != server['server_id']]
+                        fleet = fleet[fleet['server_id'].astype(str) != server['server_id']]
 
                         # Increment server ID counter
                         server_id_counter += 1
@@ -227,9 +237,9 @@ def handle_move_action(time_step, current_demand, solution, fleet, datacenters, 
         demand_medium = row['medium']
 
         # Calculate current fleet capacity per latency sensitivity
-        high_capacity = fleet[(fleet['server_generation'] == server_generation) & (fleet['latency_sensitivity'] == 'high')]['capacity'].sum()
-        medium_capacity = fleet[(fleet['server_generation'] == server_generation) & (fleet['latency_sensitivity'] == 'medium')]['capacity'].sum()
-        low_capacity = fleet[(fleet['server_generation'] == server_generation) & (fleet['latency_sensitivity'] == 'low')]['capacity'].sum()
+        high_capacity = fleet[(fleet['server_generation'].astype(str) == server_generation) & (fleet['latency_sensitivity'] == 'high')]['capacity'].sum()
+        medium_capacity = fleet[(fleet['server_generation'].astype(str) == server_generation) & (fleet['latency_sensitivity'] == 'medium')]['capacity'].sum()
+        low_capacity = fleet[(fleet['server_generation'].astype(str) == server_generation) & (fleet['latency_sensitivity'] == 'low')]['capacity'].sum()
 
         # Determine if there's a need to move servers to better match the demand
         unmet_demand_high = max(demand_high - high_capacity, 0)
@@ -264,8 +274,6 @@ def handle_move_action(time_step, current_demand, solution, fleet, datacenters, 
                         'server_generation': server_generation,
                         'server_id':  f"{server_generation}_TS{time_step}_{server_id_counter}",
                         'action': 'move',
-                        'from_latency': source_latency,
-                        'to_latency': target_latency
                     }
 
                     action_df = pd.DataFrame([action])
@@ -290,7 +298,7 @@ def decide_actions_for_time_step(time_step, current_demand, solution, fleet, dat
     # Then if we somehow end up with excess servers, we carry out the SELL action until demand is met
 
     # Action: Move
-    # solution, fleet, server_id_counter, profit = handle_move_action(time_step, solution, fleet, datacenters, profit)
+    solution, fleet, server_id_counter, profit = handle_move_action(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter, profit)
 
     # Action: Buy
     solution, fleet, server_id_counter, profit = handle_buy_action(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter, profit)
@@ -308,7 +316,7 @@ def get_my_solution(actual_demand, datacenters, servers, selling_prices):
 
     # Initialise the fleet data frame
     fleet_columns = ['time_step', 'datacenter_id', 'server_generation', 'server_id', 'action',
-                     'slots_size', 'lifespan', 'moved', 'life_expectancy', 'capacity']
+                     'slots_size', 'lifespan', 'moved', 'life_expectancy', 'capacity', 'latency_sensitivity']
     fleet = pd.DataFrame(columns=fleet_columns)
 
     # Counter to store server ID (for output)
@@ -318,16 +326,18 @@ def get_my_solution(actual_demand, datacenters, servers, selling_prices):
     profit = 0
 
     # Iterate over each time step
-    for time_step in range(1, len(actual_demand) + 1):
+    for time_step in range(2, len(actual_demand) + 1):
+        if time_step == 11:
+            break
         # Get demand for the current time step
         current_demand = actual_demand[actual_demand['time_step'] == time_step]
 
-        if time_step != 1:
+        print("Time Step: ", time_step)
+        if time_step > 1:
             # Decide on actions based on demand and current fleet
             solution, fleet, server_id_counter, profit = decide_actions_for_time_step(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices, server_id_counter, profit)
         else: # First Time Step - i.e. no servers initially
             solution, fleet, server_id_counter, profit = buy_initial_demand(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter, profit)
-            break
 
     return solution
 
