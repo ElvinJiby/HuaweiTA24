@@ -468,6 +468,8 @@ def evaluation_function(solution,
         logger.error(e)
         return None
 
+
+# Functions we made but ended up unused due to lack of time :)
 def calc_o_value(solution, current_demand, datacenters, servers, selling_prices, ts, fleet):
     """Function that calculates the O value for a datacenter at a given time-step"""
     # prepare solution data

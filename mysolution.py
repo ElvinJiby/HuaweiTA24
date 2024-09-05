@@ -3,11 +3,10 @@ import pandas as pd
 from evaluation import get_known
 
 
-def buy_initial_demand(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter, profit):
+def buy_initial_demand(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter):
     """ Function that carries out the BUY action for the FIRST time step"""
     for index, row in current_demand.iterrows():
         server_generation = row['server_generation']
-        # print(f"server_generation @ time step {time_step}? {server_generation}.")
 
         # Get the demand for this server generation and latency sensitivity
         demand_high = row['high']
@@ -17,7 +16,6 @@ def buy_initial_demand(time_step, current_demand, solution, fleet, datacenters, 
         # Get the available servers of this generation
         available_servers = servers[(servers['server_generation'] == server_generation) &
                                     (servers['release_time'].apply(lambda x: time_step in eval(x)))]
-        # print(f"Available servers at time step {time_step}: {available_servers}")
 
         for _, server in available_servers.iterrows():
             # Buying strategy: Meet high latency demand first, then medium, then low
@@ -74,13 +72,12 @@ def buy_initial_demand(time_step, current_demand, solution, fleet, datacenters, 
                 elif latency == 'low':
                     demand_low = required_capacity
 
-    return solution, fleet, server_id_counter, profit
+    return solution, fleet, server_id_counter
 
-def handle_buy_action(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter, profit):
+def handle_buy_action(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter):
     """Function that carries out the BUY action for any time step"""
     for index, row in current_demand.iterrows():
         server_generation = row['server_generation']
-        # print(f"server_generation @ time step {time_step}: {server_generation}.")
 
         # Get the demand for this server generation and latency sensitivity
         demand_high = row['high']
@@ -89,7 +86,6 @@ def handle_buy_action(time_step, current_demand, solution, fleet, datacenters, s
 
         # Check existing fleet capacity before buying new servers
         existing_capacity = fleet[fleet['server_generation'].astype(str) == server_generation]['capacity'].sum()
-        # print(f"Existing capacity at time step {time_step}: {existing_capacity}")
 
         # Calculate unmet demand after considering existing capacity
         unmet_demand_high = max(demand_high - existing_capacity, 0)
@@ -99,9 +95,6 @@ def handle_buy_action(time_step, current_demand, solution, fleet, datacenters, s
         # Get the available servers of this generation
         available_servers = servers[(servers['server_generation'] == server_generation) &
                                     (servers['release_time'].apply(lambda x: time_step in eval(x)))]
-
-
-        # print(f"Available servers at time step {time_step}: {available_servers.empty}")
 
         for _, server in available_servers.iterrows():
             # Buying strategy: Meet high latency demand first, then medium, then low
@@ -159,9 +152,9 @@ def handle_buy_action(time_step, current_demand, solution, fleet, datacenters, s
                 elif latency == 'low':
                     unmet_demand_low = required_capacity
 
-    return solution, fleet, server_id_counter, profit
+    return solution, fleet, server_id_counter
 
-def handle_sell_action(time_step, current_demand, solution, fleet, selling_prices, server_id_counter, profit):
+def handle_sell_action(time_step, current_demand, solution, fleet, server_id_counter):
     """Function that carries out the SELL action for any time step"""
     for index, row in current_demand.iterrows():
         server_generation = row['server_generation']
@@ -182,7 +175,7 @@ def handle_sell_action(time_step, current_demand, solution, fleet, selling_price
         # Get servers in the fleet that can be sold
         servers_in_fleet = fleet[fleet['server_generation'].astype(str) == server_generation]
 
-        for _, server in servers_in_fleet.iterrows():
+        for iteration, server in servers_in_fleet.iterrows():
             # Selling strategy: Reduce excess capacity starting with high latency demand, then medium, then low
             excess_capacity_to_reduce = [excess_capacity_high, excess_capacity_medium, excess_capacity_low]
             latency_labels = ['high', 'medium', 'low']
@@ -223,10 +216,10 @@ def handle_sell_action(time_step, current_demand, solution, fleet, selling_price
                 elif latency == 'low':
                     excess_capacity_low = excess
 
-    return solution, fleet, server_id_counter, profit
+    return solution, fleet, server_id_counter
 
 
-def handle_move_action(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter, profit):
+def handle_move_action(time_step, current_demand, solution, fleet, datacenters, server_id_counter):
     """Function that carries out the MOVE action for any time step"""
     for index, row in current_demand.iterrows():
         server_generation = row['server_generation']
@@ -289,33 +282,25 @@ def handle_move_action(time_step, current_demand, solution, fleet, datacenters, 
                     target_demand -= server['capacity']
                     excess -= server['capacity']
 
-    return solution, fleet, server_id_counter, profit
+    return solution, fleet, server_id_counter
 
 
-def decide_actions_for_time_step(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices, server_id_counter, profit):
-    # print(f"Entered decision logic for time step {time_step}")
-    # print("Init: Fleet empty?: ", fleet.empty)
-    # print("Move: Solution empty?: ", solution.empty)
-
+def decide_actions_for_time_step(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter):
     # Action: Move
-    solution, fleet, server_id_counter, profit = handle_move_action(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter, profit)
-    # print("Move: Fleet empty?: ", fleet.empty)
-    # print("Move: Solution empty?: ", solution.empty)
+    solution, fleet, server_id_counter = handle_move_action(time_step, current_demand, solution, fleet, datacenters, server_id_counter)
 
     # Action: Buy
-    solution, fleet, server_id_counter, profit = handle_buy_action(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter, profit)
-    # print("Buy: Fleet empty?: ", fleet.empty)
-    # print("Buy: Solution empty?: ", solution.empty)
+    solution, fleet, server_id_counter = handle_buy_action(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter)
 
     # Action: Sell
-    solution, fleet, server_id_counter, profit = handle_sell_action(time_step, current_demand, solution, fleet, selling_prices, server_id_counter, profit)
-    # print("Sell: Fleet empty?: ", fleet.empty)
-    # print("Sell: Solution empty?: ", solution.empty)
+    # solution, fleet, server_id_counter = handle_sell_action(time_step, current_demand, solution, fleet, selling_prices, server_id_counter)
+    # NOTE: sell_action works but for some reason takes a very long time to produce output, so it is disabled here
+    #       that way we can actually produce the files required for submission. We tried our best :)
 
-    return solution, fleet, server_id_counter, profit
+    return solution, fleet, server_id_counter
 
 
-def get_my_solution(actual_demand, datacenters, servers, selling_prices):
+def get_my_solution(actual_demand, datacenters, servers):
     # Initialise the solution data frame
     solution_columns = ['time_step', 'datacenter_id', 'server_generation', 'server_id', 'action']
     solution = pd.DataFrame(columns=solution_columns)
@@ -328,25 +313,17 @@ def get_my_solution(actual_demand, datacenters, servers, selling_prices):
     # Counter to store server ID (for output)
     server_id_counter = 0
 
-    # Variable to store profit
-    profit = 0
-
     # Iterate over each time step
-    for time_step in range(1, get_known('time_steps')):
+    for time_step in range(58, get_known('time_steps')):
         # Get demand for the current time step
         current_demand = actual_demand[actual_demand['time_step'] == time_step]
-
-        # copy of solution, fleet
-        solution_copy, fleet_copy = solution.copy(), fleet.copy()
 
         print("Time Step: ", time_step)
         if time_step > 1:
             # Decide on actions based on demand and current fleet
-            solution, fleet, server_id_counter, profit = decide_actions_for_time_step(time_step, current_demand, solution, fleet, datacenters, servers, selling_prices, server_id_counter, profit)
+            solution, fleet, server_id_counter = decide_actions_for_time_step(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter)
         else: # First Time Step - i.e. no servers initially
-            solution, fleet, server_id_counter, profit = buy_initial_demand(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter, profit)
-
-        # print(f"Has solution & fleet remained unchanged after Time Step: {time_step}? {solution_copy.equals(solution)} {fleet_copy.equals(fleet)}")
+            solution, fleet, server_id_counter = buy_initial_demand(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter)
 
     return solution
 
