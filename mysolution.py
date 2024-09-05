@@ -2,7 +2,6 @@ import pandas as pd
 
 from evaluation import get_known
 
-
 def buy_initial_demand(time_step, current_demand, solution, fleet, datacenters, servers, server_id_counter):
     """ Function that carries out the BUY action for the FIRST time step"""
     for index, row in current_demand.iterrows():
@@ -119,7 +118,7 @@ def handle_buy_action(time_step, current_demand, solution, fleet, datacenters, s
                             'datacenter_id':
                                 datacenters[datacenters['latency_sensitivity'] == latency]['datacenter_id'].iloc[0],
                             'server_generation': server_generation,
-                            'server_id': f"{server_generation}_{server_id_counter}",
+                            'server_id': f"{server_generation}_TS{time_step}_{server_id_counter}",
                             'action': 'buy'
                         }
 

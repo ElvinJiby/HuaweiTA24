@@ -10,7 +10,7 @@ from utils import load_problem_data, save_solution
 seeds = known_seeds('test')
 demand = pd.read_csv('./data/demand.csv')
 
-for seed in seeds[7::]:
+for seed in seeds:
     # SET THE RANDOM SEED
     np.random.seed(seed)
     print(f"Seed: {seed}")
