@@ -10,9 +10,10 @@ from utils import load_problem_data, save_solution
 seeds = known_seeds('test')
 demand = pd.read_csv('./data/demand.csv')
 
-for seed in seeds:
+for seed in seeds[3:7:]:
     # SET THE RANDOM SEED
     np.random.seed(seed)
+    print(f"Seed: {seed}")
 
     # LOAD DATA
     demand, datacenters, servers, selling_prices = load_problem_data()
@@ -23,7 +24,7 @@ for seed in seeds:
 
     # CALL YOUR APPROACH HERE
     solution = get_my_solution(actual_demand, datacenters, servers, selling_prices)
-    print("Done")
+    print(f"Seed {seed} done.\n")
 
     # break
     # SAVE YOUR SOLUTION
